@@ -44,6 +44,14 @@ function App() {
     document.getElementById(focus)?.classList.add(styles.focus);
   }, [focus])
 
+  useEffect(() => {
+    // _memosRef.current = [];
+  }, [memos])
+
+  useEffect(() => {
+    // _linesRef.current = [];
+  }, [paths])
+
   const [state, setState] = useState<null | number>(_READYSTATE);
 
   const [prevState, setPrevState] = useState<
@@ -142,6 +150,112 @@ function App() {
     addTimeLine({ type: _CREATE, element: path });
 
     return path;
+  }
+
+  function changeImageFile(files: FileList | null) {
+    if(_fileInputRef.current) {
+      _fileInputRef.current.files = files;
+      
+      const uploadFile = files;
+
+      setMemos([]);
+      setPaths([]);
+
+      setFocus(null);
+      setState(_READYSTATE);
+
+      setPrevState([]);
+      setNextState([]);
+
+      _memosRef.current = [];
+      _linesRef.current = [];
+
+      if (!uploadFile || uploadFile?.length === 0) {
+        if(!_imageRef.current) return;
+        _imageRef.current.src = "";
+        return;
+      }
+
+      const base64 = new Blob([uploadFile[0]], {
+        type: uploadFile[0].type,
+      });
+
+      const url = window.URL.createObjectURL(base64);
+
+      if (_imageRef.current) _imageRef.current.src = url;
+    }
+  }
+
+  function onSave() {
+    console.log(_memosRef, _linesRef);
+    const memos = _memosRef.current.map((memo) => {
+      const {
+        innerHTML,
+        innerText,
+        style: {
+          top,
+          left,
+          backgroundColor,
+          color,
+          fontSize,
+          width,
+          height,
+          borderColor,
+          textAlign,
+        },
+        offsetLeft,
+        offsetTop,
+        offsetWidth,
+        offsetHeight,
+        id,
+      } = memo;
+      return {
+        innerHTML,
+        offsetLeft,
+        offsetTop,
+        offsetWidth,
+        offsetHeight,
+        backgroundColor,
+        color,
+        id,
+        fontSize,
+        // width,
+        // height,
+        borderColor,
+        innerText,
+        textAlign,
+        // top,
+        // left,
+      };
+    });
+
+    const lines = _linesRef.current.map((path) => {
+      const {
+        attributes: {
+          id: { value: id },
+          fill: { value: fill },
+          stroke: { value: stroke },
+          "stroke-width": { value: strokeWidth },
+          d: { value: d },
+        },
+        dataset: { startX, startY, endX, endY },
+      } = path;
+
+      return {
+        id,
+        fill,
+        stroke,
+        strokeWidth,
+        startX,
+        startY,
+        endX,
+        endY,
+        d,
+      };
+    });
+
+    console.log("memos :: ", memos);
+    console.log("lines :: ", lines);
   }
 
   return (
@@ -278,38 +392,9 @@ function App() {
         }
       }}
 
-      onPaste={(e) => {
-          if(_fileInputRef.current) {
-            _fileInputRef.current.files = e.clipboardData.files;
-            // _fileInputRef.current.dispatchEvent(new Event("change"));
-            // _fileInputRef.current.dispatchEvent(new Event("input"));
-            
-            const uploadFile = e.clipboardData.files;
-
-            setMemos([]);
-            setPaths([]);
-
-            setFocus(null);
-            setState(_READYSTATE);
-
-            setPrevState([]);
-            setNextState([]);
-
-            if (!uploadFile || uploadFile?.length === 0) {
-              if(!_imageRef.current) return;
-              _imageRef.current.src = "";
-              return;
-            }
-
-            const base64 = new Blob([uploadFile[0]], {
-              type: uploadFile[0].type,
-            });
-
-            const url = window.URL.createObjectURL(base64);
-
-            if (_imageRef.current) _imageRef.current.src = url;
-          }
-      }}
+      onPaste={(e) => 
+        changeImageFile(e.clipboardData.files)
+      }
 
     >
       <div className={styles.toolbar}>
@@ -319,35 +404,12 @@ function App() {
           ref={_fileInputRef}
           accept="image/*"
           onInput={(e) => console.log(e)}
-          onChange={(e) => {
-            const uploadFile = e.currentTarget.files;
-
-            setMemos([]);
-            setPaths([]);
-
-            setFocus(null);
-            setState(_READYSTATE);
-
-            setPrevState([]);
-            setNextState([]);
-
-            if (!uploadFile || uploadFile?.length === 0) {
-              if(!_imageRef.current) return;
-              _imageRef.current.src = "";
-              return;
-            }
-
-            const base64 = new Blob([uploadFile[0]], {
-              type: uploadFile[0].type,
-            });
-
-            const url = window.URL.createObjectURL(base64);
-
-            if (_imageRef.current) _imageRef.current.src = url;
-          }}
+          onChange={(e) => 
+            changeImageFile(e.currentTarget.files)
+          }
         />
 
-        <button>SAVE</button>
+        <button onClick={onSave}>SAVE</button>
 
         <button
           id={id + "_textArea_btn"}
@@ -432,14 +494,14 @@ function App() {
                 stateBtnEnabled();
 
                 setPrevState((c) => {
-                  c.pop();
-                  return c;
+                  return c.slice(0, -1);
                 });
                 
                 setPaths((p) => {
-                  p.pop();
-                  return p;
+                  return p.slice(0, -1);
                 });
+
+                _linesRef.current = [];
               }
             }}
             onClick={(e: React.MouseEvent<SVGSVGElement>) => {
@@ -480,18 +542,17 @@ function App() {
           >
 
             {
-              paths.map(({id, style, startX, startY}) => {
+              paths.map(({id, style, startX, startY}, index) => {
                 return <path
                           key={id}
                             id={id}
                             className={styles.path}
-                            // style={style}
                             stroke={style.stroke}
                             strokeWidth={style.strokeWidth}
                             fill={style.fill}
                             ref={(e: SVGPathElement) => {
                               if (e) {
-                                _linesRef.current[_linesRef.current.length] = e;
+                                _linesRef.current[index] = e;
                               }
                             }}
                             data-start-x = {String(startX)}
@@ -528,7 +589,7 @@ function App() {
           />
 
           {
-            memos.map(({id: memoId, text, top, left}) => {
+            memos.map(({id: memoId, text, top, left}, index) => {
               return <article
               key={memoId}
               draggable
@@ -541,7 +602,7 @@ function App() {
               }}
               ref={(e: HTMLDivElement) => {
                 if (e) {
-                  _memosRef.current[_memosRef.current.length] = e;
+                  _memosRef.current[index] = e;
                 }
               }}
               onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
@@ -581,7 +642,6 @@ function App() {
                   _lineRef.classList.remove(styles.focus);
                 })
                 
-                // e.currentTarget.classList.add(styles.focus);
                 setFocus(memoId);
               }}
               
