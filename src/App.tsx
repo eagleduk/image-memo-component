@@ -1,50 +1,16 @@
 import styles from "./App.module.css";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-// 시작전(이미지 로드 전), 이미지 로드 후, 텍스트 박스 찍기, 텍스트 입력 중, 라인 그리기 시작, 라인 그리는 중
-const _READYSTATE = null;
-const _DEFAULTSTATE = 0;
-const _TEXTSTATE = 10;
-const _TYPINGSTATE = 11;
-const _LINESTATE = 20;
-const _DRAWINGSTATE = 21;
+import {
+  _READYSTATE, _DEFAULTSTATE, _TEXTSTATE, _TYPINGSTATE, _LINESTATE, _DRAWINGSTATE,
+  _CREATE, _DELETE
+} from "./constants";
 
-// 등록/삭제 상태
-const _CREATE = 1;
-const _DELETE = -1;
-
-function updateSvgPath(e, id, focus) {
-  const paint = document.getElementById(id);
-  const rect = paint.getBoundingClientRect();
-
-  const target = document.getElementById(focus);
-
-  const { startX, startY } = target.dataset;
-
-  const a = "M" + startX + " " + startY;
-  const strPath = a + " L" + (e.pageX - rect.left) + " " + (e.pageY - rect.top);
-  // Get the smoothed part of the path that will not change
-
-  target.dataset.endX = e.pageX - rect.left;
-  target.dataset.endY = e.pageY - rect.top;
-
-  target.setAttribute("d", strPath);
-
-  return {
-    x: e.pageX - rect.left,
-    y: e.pageY - rect.top,
-  };
-}
-
-function getMousePosition(e, id) {
-  const paint = document.getElementById(id);
-  const rect = paint.getBoundingClientRect();
-  return {
-    x: e.pageX - rect.left,
-    y: e.pageY - rect.top,
-  };
-}
+import {
+  getMousePosition,
+   getUUIDStr,updateSvgPath
+} from "./functions";
 
 function App() {
   const id = useId();
@@ -52,12 +18,32 @@ function App() {
   const _wrapperRef = useRef<HTMLDivElement>(null);
   const _svgRef = useRef<SVGSVGElement>(null);
   const _imageRef = useRef<HTMLImageElement>(null);
-  const _addLineBtnEl = useRef<HTMLButtonElement>(null);
-  const _addTextAreaBtnEl = useRef<HTMLButtonElement>(null);
+  const _addLineBtnRef = useRef<HTMLButtonElement>(null);
+  const _addTextAreaBtnRef = useRef<HTMLButtonElement>(null);
+  const _fileInputRef = useRef<HTMLInputElement>(null);
+  const _memosRef = useRef<HTMLDivElement[]>([]);
+  const _linesRef = useRef<SVGPathElement[]>([]);
 
-  const [memos, setMemos] = useState<HTMLDivElement[]>([]);
-  const [paths, setPaths] = useState<SVGPathElement[]>([]);
-  const [focus, setFocus] = useState<HTMLElement | null>(null);
+  const [memos, setMemos] = useState<{ id: string; top: string; left: string; text: null | string; }[]>([]);
+  const [paths, setPaths] = useState<{ id: string; style: React.CSSProperties; startX: number; startY: number; }[]>([]);
+  const [focus, setFocus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if(focus === null) {
+      
+      _memosRef.current.forEach((_memo) => {
+        _memo.classList.remove(styles.focus);
+        _memo.querySelector("div")?.blur();
+      })
+
+      _linesRef.current.forEach((_lineRef) => {
+        _lineRef.classList.remove(styles.focus);
+      })
+      return;
+    };
+    document.getElementById(focus)?.classList.add(styles.focus);
+  }, [focus])
+
   const [state, setState] = useState<null | number>(_READYSTATE);
 
   const [prevState, setPrevState] = useState<
@@ -73,34 +59,30 @@ function App() {
   }
 
   function textStateEnabled() {
-    const textAreaBtnEl = document.getElementById(id + "_textArea_btn");
-    if (textAreaBtnEl) {
-      textAreaBtnEl.classList.remove("active");
-      textAreaBtnEl.removeAttribute("disabled");
+    if (_addTextAreaBtnRef.current) {
+      _addTextAreaBtnRef.current.classList.remove("active");
+      _addTextAreaBtnRef.current.removeAttribute("disabled");
     }
   }
 
   function textStateDisabled() {
-    const textAreaBtnEl = document.getElementById(id + "_textArea_btn");
-    if (textAreaBtnEl) {
-      textAreaBtnEl.classList.add("active");
-      textAreaBtnEl.setAttribute("disabled", "true");
+    if (_addTextAreaBtnRef.current) {
+      _addTextAreaBtnRef.current.classList.add("active");
+      _addTextAreaBtnRef.current.setAttribute("disabled", "true");
     }
   }
 
   function lineStateEnabled() {
-    const lineBtnEl = document.getElementById(id + "_line_btn");
-    if (lineBtnEl) {
-      lineBtnEl.classList.remove("active");
-      lineBtnEl.removeAttribute("disabled");
+    if (_addLineBtnRef.current) {
+      _addLineBtnRef.current.classList.remove("active");
+      _addLineBtnRef.current.removeAttribute("disabled");
     }
   }
 
   function lineStateDisabled() {
-    const lineBtnEl = document.getElementById(id + "_line_btn");
-    if (lineBtnEl) {
-      lineBtnEl.classList.add("active");
-      lineBtnEl.setAttribute("disabled", "true");
+    if (_addLineBtnRef.current) {
+      _addLineBtnRef.current.classList.add("active");
+      _addLineBtnRef.current.setAttribute("disabled", "true");
     }
   }
 
@@ -116,88 +98,19 @@ function App() {
   }
 
   function createMemo(text = null, { x = 0, y = 0 }) {
-    const uuidStr = window.crypto
-      .getRandomValues(new Uint32Array(1))[0]
-      .toString(36);
+    const uuidStr = getUUIDStr();
 
     const memoId = id + "_memo_" + uuidStr;
 
-    const memo = document.createElement("article");
-    memo.draggable = true;
-    memo.id = memoId;
-    memo.className = styles.memo;
-    memo.dataset.anchor = "--" + id + "-image";
-    memo.style.top = (text === null ? y - 15 : y) + "px";
-    memo.style.left = (text === null ? x - 50 : x) + "px";
-
-    memo.addEventListener("dragstart", (e: DragEvent) => {
-      const {
-        layerX,
-        layerY,
-        // target: { clientWidth, clientHeight },
-      } = e;
-
-      e.target?.setAttribute("layerX", String(layerX));
-      e.target?.setAttribute("layerY", String(layerY));
-    });
-    memo.addEventListener("dragend", (e: DragEvent) => {
-      const { clientX, clientY } = e;
-      // const { clientWidth, clientHeight } = e.currentTarget;
-      const { scrollTop, scrollLeft } = e.target.parentElement;
-      const { top, left } = e.target.parentElement.getBoundingClientRect();
-
-      const layerX = e.currentTarget.getAttribute("layerX");
-      const layerY = e.currentTarget.getAttribute("layerY");
-
-      const positionX = clientX - Number(layerX) - left + scrollLeft;
-      const positionY = clientY - Number(layerY) - top + scrollTop;
-
-      e.currentTarget.style.top = positionY + "px";
-      e.currentTarget.style.left = positionX + "px";
-    });
-    memo.addEventListener("dragover", (e) => e.preventDefault());
-    memo.addEventListener("click", (e: MouseEvent) => {
-      setMemos((c) =>
-        c.map((memo) => {
-          memo.classList.remove("focus");
-          return memo;
-        })
-      );
-
-      memo.classList.add("focus");
-      setFocus(memo);
-    });
-
-    new ResizeObserver((entries) => {
-      console.log("container resized", entries.target);
-    }).observe(memo);
-
-    const textArea = document.createElement("div");
-    textArea.contentEditable = "true";
-    textArea.innerHTML = text ?? "";
-
-    textArea.addEventListener("click", (e) => {
-      e.stopPropagation();
-      setState(_TYPINGSTATE);
-      console.log("text area clicked", memoId);
-      memo.classList.add("focus");
-      setFocus(memo);
-    });
-
-    textArea.addEventListener("keydown", (e) => {
-      if (e.ctrlKey && e.key === "Enter") {
-        textArea.blur();
-        memo.classList.remove("focus");
-        setState(_DEFAULTSTATE);
-        setFocus(null);
-      }
-    });
-
-    memo.appendChild(textArea);
-    // memo.contentEditable = true;
+    const memo = {
+      id: memoId,
+      top: (text === null ? y - 15 : y) + "px",
+      left: (text === null ? x - 50 : x) + "px",
+      text
+    }
 
     setMemos((m) => [...m, memo]);
-    // this.#ids.push(memoId);
+
     addTimeLine({ type: _CREATE, element: memo });
     return memo;
   }
@@ -206,43 +119,24 @@ function App() {
     e,
     { fill = "none", stroke = "#000000", strokeWidth = 3 }
   ) {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    const uuidStr = window.crypto
-      .getRandomValues(new Uint32Array(1))[0]
-      .toString(36);
-
+    const uuidStr = getUUIDStr();
     const pathId = id + "_path_" + uuidStr;
 
-    // TODO: Option 처리
-    path.setAttribute("id", pathId);
-    path.setAttribute("fill", fill);
-    path.setAttribute("stroke", stroke);
-    path.setAttribute("stroke-width", String(strokeWidth));
-    path.setAttribute("stroke-linejoin", "round");
-    path.classList.add("path");
-    path.addEventListener("click", (e) => {
-      // e.stopPropagation();
-      console.log("path clicked", pathId);
-      setFocus(document.getElementById(pathId));
-
-      setPaths((p) => {
-        p.forEach((path) => path.classList.remove("focus"));
-        return p;
-      });
-      path.classList.add("focus");
-    });
     const pt = getMousePosition(e, id + "_paint");
 
-    path.dataset.startX = String(pt.x);
-    path.dataset.startY = String(pt.y);
-
-    // appendToBuffer(pt);
-    // path.setAttribute("d", strPath);
-
-    _wrapperRef.current?.appendChild(path);
+    const path = {
+      id: pathId,
+      style: {
+        fill,
+        stroke,
+        strokeWidth
+      },
+      startX: pt.x,
+      startY: pt.y
+    } 
 
     setState(_DRAWINGSTATE);
-    setFocus(path);
+    setFocus(path.id);
     setPaths((p) => [...p, path]);
 
     addTimeLine({ type: _CREATE, element: path });
@@ -254,10 +148,11 @@ function App() {
     <div
       id={id}
       className={styles.content}
+      tabIndex={0} // Add this line
       onClick={(e) => {
-        const element = e.currentTarget;
-
-        if (state === _READYSTATE || state === _DRAWINGSTATE) return;
+        const element = e.target;
+        console.log("CLICK :::: ", element, state);
+        if (state === _READYSTATE || state === _LINESTATE) return;
 
         if (
           element.nodeName === "ARTICLE" ||
@@ -268,26 +163,15 @@ function App() {
           return;
         }
 
-        setMemos((m) => {
-          m.forEach((memo) => {
-            memo.classList.remove("focus");
-            memo.querySelector("div").blur();
-          });
-
-          return m;
-        });
-
-        setPaths((p) => {
-          p.forEach((path) => path.classList.remove("focus"));
-          return p;
-        });
 
         setFocus(null);
       }}
+      
       onKeyDown={(e) => {
+        console.log("onKeyDown ", e);
         if (e.code === "Escape") {
           setState(_DEFAULTSTATE);
-          e.target.dispatchEvent(new Event("click"));
+          setFocus(null);
         } else if (e.code === "Delete") {
           if (state === _TYPINGSTATE) {
             return;
@@ -296,7 +180,7 @@ function App() {
             // TODO: 텍스트 입력중 바로 삭제해버림. 입력중 상태라도 필요할 듯
             const element = document.getElementById(focus);
             addTimeLine({ type: _DELETE, element: element });
-            element.remove();
+            // element.remove();
             setFocus(null);
           }
         }
@@ -306,18 +190,34 @@ function App() {
 
           if (prevState.length === 0) return;
 
-          const latest = prevState[-1];
+          const latest = prevState.pop();
+
+          if(!latest) return;
 
           setPrevState((p) => {
-            p.pop();
-            return p;
+            // p.pop();
+            return prevState;
           });
 
           setNextState((p) => [...p, latest]);
 
           if (latest.type === _CREATE) {
             const element = document.getElementById(latest.target);
-            element.remove();
+            // if(element)
+            // element.remove();
+          
+            // const element = latest.element;
+            if(element === null) return;
+
+            if (element.nodeName === "ARTICLE") {
+              setMemos(memo => memo.filter(({memoId}) => memoId !== latest.target))
+            }
+
+            if (element.nodeName === "path") {
+              // _wrapperRef.current?.appendChild(element);
+              setPaths(path => path.filter(({id}) => id !== latest.target));
+            }
+
           } else if (latest.type === _DELETE) {
             const element = latest.element;
 
@@ -336,24 +236,29 @@ function App() {
 
           if (nextState.length === 0) return;
 
-          const latest = nextState[-1];
+          const latest = nextState.pop();
+
+          if(!latest) return;
 
           setNextState((p) => {
-            p.pop();
-            return p;
+            return nextState;
           });
 
           setPrevState((p) => [...p, latest]);
 
           if (latest.type === _CREATE) {
-            const element = latest.element;
+            const element = document.getElementById(latest.target);
+
+            if(!element) return;
 
             if (element.nodeName === "ARTICLE") {
-              _wrapperRef.current?.appendChild(element);
+              // _wrapperRef.current?.appendChild(element);
+              setMemos(memo => [...memo, latest.element])
             }
 
             if (element.nodeName === "path") {
-              _svgRef.current?.appendChild(element);
+              // _svgRef.current?.appendChild(element);
+              setPaths(path => [...path, latest.element]);
             }
           } else if (latest.type === _DELETE) {
             const element = document.getElementById(latest.target);
@@ -364,22 +269,22 @@ function App() {
         if (e.code === "KeyL") {
           console.log("라인 그리기");
           if (focus !== null) return;
-          _addLineBtnEl.current?.click();
+          _addLineBtnRef.current?.click();
         }
         if (e.code === "KeyT") {
           console.log("TextArea 그리기");
           if (focus !== null) return;
-          _addTextAreaBtnEl.current?.click();
+          _addTextAreaBtnRef.current?.click();
         }
       }}
-    >
-      <div className={styles.toolbar}>
-        <input
-          type="file"
-          id={id + "_file_input"}
-          accept="image/*"
-          onChange={(e) => {
-            const uploadFile = e.target.files;
+
+      onPaste={(e) => {
+          if(_fileInputRef.current) {
+            _fileInputRef.current.files = e.clipboardData.files;
+            // _fileInputRef.current.dispatchEvent(new Event("change"));
+            // _fileInputRef.current.dispatchEvent(new Event("input"));
+            
+            const uploadFile = e.clipboardData.files;
 
             setMemos([]);
             setPaths([]);
@@ -391,6 +296,43 @@ function App() {
             setNextState([]);
 
             if (!uploadFile || uploadFile?.length === 0) {
+              if(!_imageRef.current) return;
+              _imageRef.current.src = "";
+              return;
+            }
+
+            const base64 = new Blob([uploadFile[0]], {
+              type: uploadFile[0].type,
+            });
+
+            const url = window.URL.createObjectURL(base64);
+
+            if (_imageRef.current) _imageRef.current.src = url;
+          }
+      }}
+
+    >
+      <div className={styles.toolbar}>
+        <input
+          type="file"
+          id={id + "_file_input"}
+          ref={_fileInputRef}
+          accept="image/*"
+          onInput={(e) => console.log(e)}
+          onChange={(e) => {
+            const uploadFile = e.currentTarget.files;
+
+            setMemos([]);
+            setPaths([]);
+
+            setFocus(null);
+            setState(_READYSTATE);
+
+            setPrevState([]);
+            setNextState([]);
+
+            if (!uploadFile || uploadFile?.length === 0) {
+              if(!_imageRef.current) return;
               _imageRef.current.src = "";
               return;
             }
@@ -409,8 +351,8 @@ function App() {
 
         <button
           id={id + "_textArea_btn"}
-          ref={_addTextAreaBtnEl}
-          onClick={(e) => {
+          ref={_addTextAreaBtnRef}
+          onClick={(_: React.MouseEvent) => {
             if (state === _READYSTATE) return;
             textStateEnabled();
             lineStateEnabled();
@@ -423,8 +365,8 @@ function App() {
         </button>
         <button
           id={id + "_line_btn"}
-          ref={_addLineBtnEl}
-          onClick={(e) => {
+          ref={_addLineBtnRef}
+          onClick={(_: React.MouseEvent) => {
             if (state === _READYSTATE) return;
             setState(_LINESTATE);
             lineStateDisabled();
@@ -488,13 +430,19 @@ function App() {
                 e.preventDefault();
                 setState(_DEFAULTSTATE);
                 stateBtnEnabled();
-                document.getElementById(focus)?.remove();
 
-                setPrevState((c) => c.pop());
-                setPaths((p) => p.pop());
+                setPrevState((c) => {
+                  c.pop();
+                  return c;
+                });
+                
+                setPaths((p) => {
+                  p.pop();
+                  return p;
+                });
               }
             }}
-            onClick={(e) => {
+            onClick={(e: React.MouseEvent<SVGSVGElement>) => {
               if (state === _TEXTSTATE) {
                 const rect = _svgRef.current?.getBoundingClientRect();
 
@@ -504,36 +452,60 @@ function App() {
                   x: e.pageX - rect.left,
                   y: e.pageY - rect.top,
                 });
-                _wrapperRef.current?.appendChild(memo);
 
                 setState(_DEFAULTSTATE);
                 stateBtnEnabled();
               } else if (state === _LINESTATE) {
                 const path = createPath(e, {});
 
-                _svgRef.current?.appendChild(path);
-
                 setState(_DRAWINGSTATE);
-                setFocus(path);
+                setFocus(path.id);
               } else if (state === _DRAWINGSTATE) {
-                // const focus = this.#focus;
+                if (focus === null) return;
 
                 updateSvgPath(e, id + "_paint", focus);
 
                 const path = createPath(e, {});
 
-                _svgRef.current?.appendChild(path);
-
                 setState(_DRAWINGSTATE);
-                setFocus(path);
+                setFocus(path.id);
               }
             }}
-            onMouseMove={(e) => {
+            onMouseMove={(e: React.MouseEvent<SVGSVGElement>) => {
+              if (focus === null) return;
               if (state === _DRAWINGSTATE) {
                 updateSvgPath(e, id + "_paint", focus);
               }
             }}
-          ></svg>
+          >
+
+            {
+              paths.map(({id, style, startX, startY}) => {
+                return <path
+                          key={id}
+                            id={id}
+                            className={styles.path}
+                            // style={style}
+                            stroke={style.stroke}
+                            strokeWidth={style.strokeWidth}
+                            fill={style.fill}
+                            ref={(e: SVGPathElement) => {
+                              if (e) {
+                                _linesRef.current[_linesRef.current.length] = e;
+                              }
+                            }}
+                            data-start-x = {String(startX)}
+                            data-start-y = {String(startY)}
+                            onClick={(e: React.MouseEvent<SVGElement>) => {
+                              _linesRef.current.forEach((_lineRef) => _lineRef.classList.remove(styles.focus));
+                              setFocus(id);
+                            }}
+                          >
+                </path>
+              })
+            }
+
+          </svg>
 
           <img
             style={{
@@ -554,6 +526,87 @@ function App() {
               setState(_DEFAULTSTATE);
             }}
           />
+
+          {
+            memos.map(({id: memoId, text, top, left}) => {
+              return <article
+              key={memoId}
+              draggable
+              id={memoId}
+              className={styles.memo}
+              data-anchor={"--" + id + "-image"}
+              style={{
+                top,
+                left
+              }}
+              ref={(e: HTMLDivElement) => {
+                if (e) {
+                  _memosRef.current[_memosRef.current.length] = e;
+                }
+              }}
+              onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+                const {
+                  layerX,
+                  layerY,
+                } = e.nativeEvent;
+          
+                e.currentTarget?.setAttribute("layerX", String(layerX));
+                e.currentTarget?.setAttribute("layerY", String(layerY));
+              }}
+              onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+                const { clientX, clientY } = e;
+                if(!_wrapperRef.current) return;
+          
+                const { scrollTop, scrollLeft } = _wrapperRef.current;
+                const { top, left } = _wrapperRef.current.getBoundingClientRect();
+          
+                const layerX = e.currentTarget.getAttribute("layerX");
+                const layerY = e.currentTarget.getAttribute("layerY");
+          
+                const positionX = clientX - Number(layerX) - left + scrollLeft;
+                const positionY = clientY - Number(layerY) - top + scrollTop;
+          
+                e.currentTarget.style.top = positionY + "px";
+                e.currentTarget.style.left = positionX + "px";
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={(e: React.MouseEvent) => {
+                console.log(_memosRef, _linesRef)
+                _memosRef.current.forEach((_memo) => {
+                  _memo.classList.remove(styles.focus);
+                  _memo.querySelector("div")?.blur();
+                })
+
+                _linesRef.current.forEach((_lineRef) => {
+                  _lineRef.classList.remove(styles.focus);
+                })
+                
+                // e.currentTarget.classList.add(styles.focus);
+                setFocus(memoId);
+              }}
+              
+              >
+                <div contentEditable 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setState(_TYPINGSTATE);
+                    // e.currentTarget.classList.add(styles.focus);
+                    setFocus(memoId);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.ctrlKey && e.key === "Enter") {
+                      e.currentTarget.blur();
+                      e.currentTarget.classList.remove(styles.focus);
+                      setState(_DEFAULTSTATE);
+                      setFocus(null);
+                    }
+                  }}
+                >
+                  {text}
+                </div>
+                </article>
+            })
+          }
         </div>
       </div>
     </div>
