@@ -25,3 +25,4 @@ image 에 메모(article) 기능 넣어보기 Component
 
 - [ ] 라인 그리고 우 클릭 시 라인 두개가 사라짐, reference 는 남아있다.
 - [ ] 실행취소, 되돌리기 문제
+- [ ] focus 를 Reference로 변경해야 할까?

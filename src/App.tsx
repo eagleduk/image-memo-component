@@ -3,14 +3,33 @@ import styles from "./App.module.css";
 import { useEffect, useId, useRef, useState } from "react";
 
 import {
-  _READYSTATE, _DEFAULTSTATE, _TEXTSTATE, _TYPINGSTATE, _LINESTATE, _DRAWINGSTATE,
-  _CREATE, _DELETE
+  _READYSTATE,
+  _DEFAULTSTATE,
+  _TEXTSTATE,
+  _TYPINGSTATE,
+  _LINESTATE,
+  _DRAWINGSTATE,
+  _CREATE,
+  _DELETE,
 } from "./constants";
 
-import {
-  getMousePosition,
-   getUUIDStr,updateSvgPath
-} from "./functions";
+import { getMousePosition, getUUIDStr, updateSvgPath } from "./functions";
+
+type _MEMOTYPE = {
+  id: string;
+  top: string;
+  left: string;
+  text: null | string;
+};
+
+type _LINETYPE = {
+  id: string;
+  style: React.CSSProperties;
+  startX: number;
+  startY: number;
+};
+
+type _TIMELINETYPE = { type: number; target: string; element: HTMLElement };
 
 function App() {
   const id = useId();
@@ -24,42 +43,29 @@ function App() {
   const _memosRef = useRef<HTMLDivElement[]>([]);
   const _linesRef = useRef<SVGPathElement[]>([]);
 
-  const [memos, setMemos] = useState<{ id: string; top: string; left: string; text: null | string; }[]>([]);
-  const [paths, setPaths] = useState<{ id: string; style: React.CSSProperties; startX: number; startY: number; }[]>([]);
+  const [memos, setMemos] = useState<_MEMOTYPE[]>([]);
+  const [paths, setPaths] = useState<_LINETYPE[]>([]);
   const [focus, setFocus] = useState<string | null>(null);
 
   useEffect(() => {
-    if(focus === null) {
-      
+    if (focus === null) {
       _memosRef.current.forEach((_memo) => {
         _memo.classList.remove(styles.focus);
         _memo.querySelector("div")?.blur();
-      })
+      });
 
       _linesRef.current.forEach((_lineRef) => {
         _lineRef.classList.remove(styles.focus);
-      })
+      });
       return;
-    };
+    }
     document.getElementById(focus)?.classList.add(styles.focus);
-  }, [focus])
-
-  useEffect(() => {
-    // _memosRef.current = [];
-  }, [memos])
-
-  useEffect(() => {
-    // _linesRef.current = [];
-  }, [paths])
+  }, [focus]);
 
   const [state, setState] = useState<null | number>(_READYSTATE);
 
-  const [prevState, setPrevState] = useState<
-    { type: number; target: string; element: HTMLElement }[]
-  >([]);
-  const [nextState, setNextState] = useState<
-    { type: number; target: string; element: HTMLElement }[]
-  >([]);
+  const [prevState, setPrevState] = useState<_TIMELINETYPE[]>([]);
+  const [nextState, setNextState] = useState<_TIMELINETYPE[]>([]);
 
   function stateBtnEnabled() {
     textStateEnabled();
@@ -114,8 +120,8 @@ function App() {
       id: memoId,
       top: (text === null ? y - 15 : y) + "px",
       left: (text === null ? x - 50 : x) + "px",
-      text
-    }
+      text,
+    };
 
     setMemos((m) => [...m, memo]);
 
@@ -124,7 +130,7 @@ function App() {
   }
 
   function createPath(
-    e,
+    e: React.MouseEvent<SVGSVGElement>,
     { fill = "none", stroke = "#000000", strokeWidth = 3 }
   ) {
     const uuidStr = getUUIDStr();
@@ -137,11 +143,11 @@ function App() {
       style: {
         fill,
         stroke,
-        strokeWidth
+        strokeWidth,
       },
       startX: pt.x,
-      startY: pt.y
-    } 
+      startY: pt.y,
+    };
 
     setState(_DRAWINGSTATE);
     setFocus(path.id);
@@ -153,9 +159,9 @@ function App() {
   }
 
   function changeImageFile(files: FileList | null) {
-    if(_fileInputRef.current) {
+    if (_fileInputRef.current) {
       _fileInputRef.current.files = files;
-      
+
       const uploadFile = files;
 
       setMemos([]);
@@ -171,7 +177,7 @@ function App() {
       _linesRef.current = [];
 
       if (!uploadFile || uploadFile?.length === 0) {
-        if(!_imageRef.current) return;
+        if (!_imageRef.current) return;
         _imageRef.current.src = "";
         return;
       }
@@ -264,23 +270,24 @@ function App() {
       className={styles.content}
       tabIndex={0} // Add this line
       onClick={(e) => {
-        const element = e.target;
-        console.log("CLICK :::: ", element, state);
+        const element = e.target as HTMLElement;
+        console.log("CLICK :::: ", state);
+        console.dir(element);
         if (state === _READYSTATE || state === _LINESTATE) return;
 
         if (
           element.nodeName === "ARTICLE" ||
-          (element.nodeName === "INPUT" && element.type === "color") ||
-          (element.nodeName === "INPUT" && element.type === "number") ||
+          (element.nodeName === "INPUT" &&
+            (element as HTMLInputElement).type === "color") ||
+          (element.nodeName === "INPUT" &&
+            (element as HTMLInputElement).type === "number") ||
           element.nodeName === "path"
         ) {
           return;
         }
 
-
         setFocus(null);
       }}
-      
       onKeyDown={(e) => {
         console.log("onKeyDown ", e);
         if (e.code === "Escape") {
@@ -306,7 +313,7 @@ function App() {
 
           const latest = prevState.pop();
 
-          if(!latest) return;
+          if (!latest) return;
 
           setPrevState((p) => {
             // p.pop();
@@ -319,19 +326,18 @@ function App() {
             const element = document.getElementById(latest.target);
             // if(element)
             // element.remove();
-          
+
             // const element = latest.element;
-            if(element === null) return;
+            if (element === null) return;
 
             if (element.nodeName === "ARTICLE") {
-              setMemos(memo => memo.filter(({memoId}) => memoId !== latest.target))
+              setMemos((memo) => memo.filter(({ id }) => id !== latest.target));
             }
 
             if (element.nodeName === "path") {
               // _wrapperRef.current?.appendChild(element);
-              setPaths(path => path.filter(({id}) => id !== latest.target));
+              setPaths((path) => path.filter(({ id }) => id !== latest.target));
             }
-
           } else if (latest.type === _DELETE) {
             const element = latest.element;
 
@@ -352,7 +358,7 @@ function App() {
 
           const latest = nextState.pop();
 
-          if(!latest) return;
+          if (!latest) return;
 
           setNextState((p) => {
             return nextState;
@@ -363,16 +369,16 @@ function App() {
           if (latest.type === _CREATE) {
             const element = document.getElementById(latest.target);
 
-            if(!element) return;
+            if (!element) return;
 
             if (element.nodeName === "ARTICLE") {
               // _wrapperRef.current?.appendChild(element);
-              setMemos(memo => [...memo, latest.element])
+              setMemos((memo) => [...memo, latest.element]);
             }
 
             if (element.nodeName === "path") {
               // _svgRef.current?.appendChild(element);
-              setPaths(path => [...path, latest.element]);
+              setPaths((path) => [...path, latest.element]);
             }
           } else if (latest.type === _DELETE) {
             const element = document.getElementById(latest.target);
@@ -391,11 +397,7 @@ function App() {
           _addTextAreaBtnRef.current?.click();
         }
       }}
-
-      onPaste={(e) => 
-        changeImageFile(e.clipboardData.files)
-      }
-
+      onPaste={(e) => changeImageFile(e.clipboardData.files)}
     >
       <div className={styles.toolbar}>
         <input
@@ -404,9 +406,7 @@ function App() {
           ref={_fileInputRef}
           accept="image/*"
           onInput={(e) => console.log(e)}
-          onChange={(e) => 
-            changeImageFile(e.currentTarget.files)
-          }
+          onChange={(e) => changeImageFile(e.currentTarget.files)}
         />
 
         <button onClick={onSave}>SAVE</button>
@@ -428,7 +428,7 @@ function App() {
         <button
           id={id + "_line_btn"}
           ref={_addLineBtnRef}
-          onClick={(_: React.MouseEvent) => {
+          onClick={(_e: React.MouseEvent) => {
             if (state === _READYSTATE) return;
             setState(_LINESTATE);
             lineStateDisabled();
@@ -496,7 +496,7 @@ function App() {
                 setPrevState((c) => {
                   return c.slice(0, -1);
                 });
-                
+
                 setPaths((p) => {
                   return p.slice(0, -1);
                 });
@@ -540,32 +540,31 @@ function App() {
               }
             }}
           >
-
-            {
-              paths.map(({id, style, startX, startY}, index) => {
-                return <path
-                          key={id}
-                            id={id}
-                            className={styles.path}
-                            stroke={style.stroke}
-                            strokeWidth={style.strokeWidth}
-                            fill={style.fill}
-                            ref={(e: SVGPathElement) => {
-                              if (e) {
-                                _linesRef.current[index] = e;
-                              }
-                            }}
-                            data-start-x = {String(startX)}
-                            data-start-y = {String(startY)}
-                            onClick={(e: React.MouseEvent<SVGElement>) => {
-                              _linesRef.current.forEach((_lineRef) => _lineRef.classList.remove(styles.focus));
-                              setFocus(id);
-                            }}
-                          >
-                </path>
-              })
-            }
-
+            {paths.map(({ id, style, startX, startY }, index) => {
+              return (
+                <path
+                  key={id}
+                  id={id}
+                  className={styles.path}
+                  stroke={style.stroke}
+                  strokeWidth={style.strokeWidth}
+                  fill={style.fill}
+                  ref={(e: SVGPathElement) => {
+                    if (e) {
+                      _linesRef.current[index] = e;
+                    }
+                  }}
+                  data-start-x={String(startX)}
+                  data-start-y={String(startY)}
+                  onClick={(_e: React.MouseEvent<SVGElement>) => {
+                    _linesRef.current.forEach((_lineRef) =>
+                      _lineRef.classList.remove(styles.focus)
+                    );
+                    setFocus(id);
+                  }}
+                ></path>
+              );
+            })}
           </svg>
 
           <img
@@ -588,65 +587,64 @@ function App() {
             }}
           />
 
-          {
-            memos.map(({id: memoId, text, top, left}, index) => {
-              return <article
-              key={memoId}
-              draggable
-              id={memoId}
-              className={styles.memo}
-              data-anchor={"--" + id + "-image"}
-              style={{
-                top,
-                left
-              }}
-              ref={(e: HTMLDivElement) => {
-                if (e) {
-                  _memosRef.current[index] = e;
-                }
-              }}
-              onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
-                const {
-                  layerX,
-                  layerY,
-                } = e.nativeEvent;
-          
-                e.currentTarget?.setAttribute("layerX", String(layerX));
-                e.currentTarget?.setAttribute("layerY", String(layerY));
-              }}
-              onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
-                const { clientX, clientY } = e;
-                if(!_wrapperRef.current) return;
-          
-                const { scrollTop, scrollLeft } = _wrapperRef.current;
-                const { top, left } = _wrapperRef.current.getBoundingClientRect();
-          
-                const layerX = e.currentTarget.getAttribute("layerX");
-                const layerY = e.currentTarget.getAttribute("layerY");
-          
-                const positionX = clientX - Number(layerX) - left + scrollLeft;
-                const positionY = clientY - Number(layerY) - top + scrollTop;
-          
-                e.currentTarget.style.top = positionY + "px";
-                e.currentTarget.style.left = positionX + "px";
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onClick={(e: React.MouseEvent) => {
-                console.log(_memosRef, _linesRef)
-                _memosRef.current.forEach((_memo) => {
-                  _memo.classList.remove(styles.focus);
-                  _memo.querySelector("div")?.blur();
-                })
+          {memos.map(({ id: memoId, text, top, left }, index) => {
+            return (
+              <article
+                key={memoId}
+                draggable
+                id={memoId}
+                className={styles.memo}
+                data-anchor={"--" + id + "-image"}
+                style={{
+                  top,
+                  left,
+                }}
+                ref={(e: HTMLDivElement) => {
+                  if (e) {
+                    _memosRef.current[index] = e;
+                  }
+                }}
+                onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
+                  const { layerX, layerY } = e.nativeEvent;
 
-                _linesRef.current.forEach((_lineRef) => {
-                  _lineRef.classList.remove(styles.focus);
-                })
-                
-                setFocus(memoId);
-              }}
-              
+                  e.currentTarget?.setAttribute("layerX", String(layerX));
+                  e.currentTarget?.setAttribute("layerY", String(layerY));
+                }}
+                onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
+                  const { clientX, clientY } = e;
+                  if (!_wrapperRef.current) return;
+
+                  const { scrollTop, scrollLeft } = _wrapperRef.current;
+                  const { top, left } =
+                    _wrapperRef.current.getBoundingClientRect();
+
+                  const layerX = e.currentTarget.getAttribute("layerX");
+                  const layerY = e.currentTarget.getAttribute("layerY");
+
+                  const positionX =
+                    clientX - Number(layerX) - left + scrollLeft;
+                  const positionY = clientY - Number(layerY) - top + scrollTop;
+
+                  e.currentTarget.style.top = positionY + "px";
+                  e.currentTarget.style.left = positionX + "px";
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onClick={(_e: React.MouseEvent) => {
+                  console.log(_memosRef, _linesRef);
+                  _memosRef.current.forEach((_memo) => {
+                    _memo.classList.remove(styles.focus);
+                    _memo.querySelector("div")?.blur();
+                  });
+
+                  _linesRef.current.forEach((_lineRef) => {
+                    _lineRef.classList.remove(styles.focus);
+                  });
+
+                  setFocus(memoId);
+                }}
               >
-                <div contentEditable 
+                <div
+                  contentEditable
                   onClick={(e) => {
                     e.stopPropagation();
                     setState(_TYPINGSTATE);
@@ -664,9 +662,9 @@ function App() {
                 >
                   {text}
                 </div>
-                </article>
-            })
-          }
+              </article>
+            );
+          })}
         </div>
       </div>
     </div>
