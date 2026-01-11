@@ -13,18 +13,35 @@ import {
   _DELETE,
 } from "./constants";
 
-import { getMousePosition, getUUIDStr, updateSvgPath } from "./functions";
+import {
+  exportMemoProperties,
+  exportPathProperties,
+  getMousePosition,
+  getUUIDStr,
+  updateSvgPath,
+} from "./functions";
+import html2canvas from "html2canvas";
+import { Memo } from "./components/Memo";
 
-type _MEMOTYPE = {
+export type _MEMOTYPE = {
   id: string;
   top: string;
   left: string;
-  text: null | string;
+  borderColor: string;
+  fontSize: string;
+  backgroundColor: string;
+  color: string;
+  width: string;
+  height: string;
+  textAlign: string;
+  innerHTML: string;
 };
 
-type _LINETYPE = {
+export type _LINETYPE = {
   id: string;
-  style: React.CSSProperties;
+  fill: string;
+  stroke: string;
+  strokeWidth: string;
   startX: number;
   startY: number;
 };
@@ -116,11 +133,18 @@ function App() {
 
     const memoId = id + "_memo_" + uuidStr;
 
-    const memo = {
+    const memo: _MEMOTYPE = {
       id: memoId,
       top: (text === null ? y - 15 : y) + "px",
       left: (text === null ? x - 50 : x) + "px",
-      text,
+      backgroundColor: "transparent",
+      color: "#000000",
+      fontSize: "14px",
+      width: "100px",
+      height: "30px",
+      borderColor: "#0000ff",
+      textAlign: "center",
+      innerHTML: text === null ? "" : text,
     };
 
     setMemos((m) => [...m, memo]);
@@ -138,13 +162,11 @@ function App() {
 
     const pt = getMousePosition(e, id + "_paint");
 
-    const path = {
+    const path: _LINETYPE = {
       id: pathId,
-      style: {
-        fill,
-        stroke,
-        strokeWidth,
-      },
+      fill,
+      stroke,
+      strokeWidth: String(strokeWidth),
       startX: pt.x,
       startY: pt.y,
     };
@@ -195,73 +217,29 @@ function App() {
   function onSave() {
     console.log(_memosRef, _linesRef);
     const memos = _memosRef.current.map((memo) => {
-      const {
-        innerHTML,
-        innerText,
-        style: {
-          top,
-          left,
-          backgroundColor,
-          color,
-          fontSize,
-          width,
-          height,
-          borderColor,
-          textAlign,
-        },
-        offsetLeft,
-        offsetTop,
-        offsetWidth,
-        offsetHeight,
-        id,
-      } = memo;
-      return {
-        innerHTML,
-        offsetLeft,
-        offsetTop,
-        offsetWidth,
-        offsetHeight,
-        backgroundColor,
-        color,
-        id,
-        fontSize,
-        // width,
-        // height,
-        borderColor,
-        innerText,
-        textAlign,
-        // top,
-        // left,
-      };
+      return exportMemoProperties(memo);
     });
 
     const lines = _linesRef.current.map((path) => {
-      const {
-        attributes: {
-          id: { value: id },
-          fill: { value: fill },
-          stroke: { value: stroke },
-          "stroke-width": { value: strokeWidth },
-          d: { value: d },
-        },
-        dataset: { startX, startY, endX, endY },
-      } = path;
-
-      return {
-        id,
-        fill,
-        stroke,
-        strokeWidth,
-        startX,
-        startY,
-        endX,
-        endY,
-        d,
-      };
+      return exportPathProperties(path);
     });
 
     console.log("memos :: ", memos);
     console.log("lines :: ", lines);
+
+    if (!_wrapperRef.current) return;
+
+    html2canvas(_wrapperRef.current).then((canvas) => {
+      // document.body.appendChild(canvas);
+      canvas.toBlob((blob) => {
+        if (blob === null) return;
+
+        const link = document.createElement("a");
+        link.download = "image-memo.png";
+        link.href = URL.createObjectURL(blob);
+        // link.click();
+      });
+    });
   }
 
   return (
@@ -540,31 +518,33 @@ function App() {
               }
             }}
           >
-            {paths.map(({ id, style, startX, startY }, index) => {
-              return (
-                <path
-                  key={id}
-                  id={id}
-                  className={styles.path}
-                  stroke={style.stroke}
-                  strokeWidth={style.strokeWidth}
-                  fill={style.fill}
-                  ref={(e: SVGPathElement) => {
-                    if (e) {
-                      _linesRef.current[index] = e;
-                    }
-                  }}
-                  data-start-x={String(startX)}
-                  data-start-y={String(startY)}
-                  onClick={(_e: React.MouseEvent<SVGElement>) => {
-                    _linesRef.current.forEach((_lineRef) =>
-                      _lineRef.classList.remove(styles.focus)
-                    );
-                    setFocus(id);
-                  }}
-                ></path>
-              );
-            })}
+            {paths.map(
+              ({ id, fill, stroke, strokeWidth, startX, startY }, index) => {
+                return (
+                  <path
+                    key={id}
+                    id={id}
+                    className={styles.path}
+                    stroke={stroke}
+                    strokeWidth={strokeWidth}
+                    fill={fill}
+                    ref={(e: SVGPathElement) => {
+                      if (e) {
+                        _linesRef.current[index] = e;
+                      }
+                    }}
+                    data-start-x={String(startX)}
+                    data-start-y={String(startY)}
+                    onClick={(_e: React.MouseEvent<SVGElement>) => {
+                      _linesRef.current.forEach((_lineRef) =>
+                        _lineRef.classList.remove(styles.focus)
+                      );
+                      setFocus(id);
+                    }}
+                  ></path>
+                );
+              }
+            )}
           </svg>
 
           <img
@@ -587,84 +567,18 @@ function App() {
             }}
           />
 
-          {memos.map(({ id: memoId, text, top, left }, index) => {
-            return (
-              <article
-                key={memoId}
-                draggable
-                id={memoId}
-                className={styles.memo}
-                data-anchor={"--" + id + "-image"}
-                style={{
-                  top,
-                  left,
-                }}
-                ref={(e: HTMLDivElement) => {
-                  if (e) {
-                    _memosRef.current[index] = e;
-                  }
-                }}
-                onDragStart={(e: React.DragEvent<HTMLDivElement>) => {
-                  const { layerX, layerY } = e.nativeEvent;
-
-                  e.currentTarget?.setAttribute("layerX", String(layerX));
-                  e.currentTarget?.setAttribute("layerY", String(layerY));
-                }}
-                onDragEnd={(e: React.DragEvent<HTMLDivElement>) => {
-                  const { clientX, clientY } = e;
-                  if (!_wrapperRef.current) return;
-
-                  const { scrollTop, scrollLeft } = _wrapperRef.current;
-                  const { top, left } =
-                    _wrapperRef.current.getBoundingClientRect();
-
-                  const layerX = e.currentTarget.getAttribute("layerX");
-                  const layerY = e.currentTarget.getAttribute("layerY");
-
-                  const positionX =
-                    clientX - Number(layerX) - left + scrollLeft;
-                  const positionY = clientY - Number(layerY) - top + scrollTop;
-
-                  e.currentTarget.style.top = positionY + "px";
-                  e.currentTarget.style.left = positionX + "px";
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onClick={(_e: React.MouseEvent) => {
-                  console.log(_memosRef, _linesRef);
-                  _memosRef.current.forEach((_memo) => {
-                    _memo.classList.remove(styles.focus);
-                    _memo.querySelector("div")?.blur();
-                  });
-
-                  _linesRef.current.forEach((_lineRef) => {
-                    _lineRef.classList.remove(styles.focus);
-                  });
-
-                  setFocus(memoId);
-                }}
-              >
-                <div
-                  contentEditable
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setState(_TYPINGSTATE);
-                    // e.currentTarget.classList.add(styles.focus);
-                    setFocus(memoId);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.ctrlKey && e.key === "Enter") {
-                      e.currentTarget.blur();
-                      e.currentTarget.classList.remove(styles.focus);
-                      setState(_DEFAULTSTATE);
-                      setFocus(null);
-                    }
-                  }}
-                >
-                  {text}
-                </div>
-              </article>
-            );
-          })}
+          {memos.map((memo, index) => (
+            <Memo
+              id={id}
+              key={memo.id}
+              memo={memo}
+              _memosRef={_memosRef}
+              index={index}
+              _wrapperRef={_wrapperRef}
+              setFocus={setFocus}
+              setState={setState}
+            />
+          ))}
         </div>
       </div>
     </div>
