@@ -6,6 +6,7 @@ import {
   exportToCanvas,
   exportToBlob,
   exportToSvg,
+  MIME_TYPES,
 } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type {
@@ -78,7 +79,6 @@ function App() {
       opacity: 100,
       groupIds: [],
       frameId: null,
-      index: "a2",
       roundness: null,
       seed: 1344348623,
       version: 16,
@@ -231,7 +231,7 @@ function App() {
     console.log(exportToBlob);
 
     const blob = await exportToBlob({
-      minType: "image/png",
+      minType: MIME_TYPES.png,
       quality: 1,
       elements: excalidrawAPI?.getSceneElements() || [],
       appState: excalidrawAPI?.getAppState() || {},
@@ -259,7 +259,12 @@ function App() {
       </div>
       <Excalidraw
         excalidrawAPI={(api) => setExcalidrawAPI(api)}
-        initialData={{ elements }}
+        initialData={{
+          elements,
+          appState: {
+            openSidebar: null,
+          },
+        }}
         UIOptions={{
           canvasActions: {
             changeViewBackgroundColor: true,
