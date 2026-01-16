@@ -1,12 +1,16 @@
 import {
+  CaptureUpdateAction,
   Excalidraw,
+  MainMenu,
   convertToExcalidrawElements,
+  exportToCanvas,
+  exportToBlob,
+  exportToSvg,
 } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import type {
   BinaryFileData,
   ExcalidrawImperativeAPI,
-  ExcalidrawElement,
 } from "@excalidraw/excalidraw/types";
 import { useEffect, useState, type ChangeEvent } from "react";
 
@@ -131,11 +135,128 @@ function App() {
     console.log(excalidrawAPI?.getFiles());
   }
 
+  function click3(e: React.MouseEvent<HTMLButtonElement>) {
+    console.log(excalidrawAPI?.getAppState());
+    excalidrawAPI?.updateScene({
+      elements: [
+        ...excalidrawAPI?.getSceneElements(),
+        {
+          type: "rectangle",
+          version: 141,
+          versionNonce: 361174001,
+          isDeleted: false,
+          id: "oDVXy8D6rom3H1-LLH2-f",
+          fillStyle: "hachure",
+          strokeWidth: 1,
+          strokeStyle: "solid",
+          roughness: 1,
+          opacity: 100,
+          angle: 0,
+          x: 100.50390625,
+          y: 93.67578125,
+          strokeColor: "#c92a2a",
+          backgroundColor: "transparent",
+          width: 186.47265625,
+          height: 141.9765625,
+          seed: 1968410350,
+          groupIds: [],
+          boundElements: null,
+          locked: false,
+          link: null,
+          updated: 1,
+          roundness: {
+            type: 3,
+            value: 32,
+          },
+        },
+        {
+          type: "text",
+          text: "Helloxcvcx",
+          version: 141,
+          versionNonce: 361174001,
+          isDeleted: false,
+          id: "oDVXy8D6rom3H1-LLH2-fsdfg",
+          fillStyle: "hachure",
+          strokeWidth: 1,
+          strokeStyle: "solid",
+          roughness: 1,
+          opacity: 100,
+          angle: 0,
+          x: 100.50390625,
+          y: 93.67578125,
+          strokeColor: "#c92a2a",
+          backgroundColor: "transparent",
+          fontSize: 20,
+          fontFamily: 1,
+          textAlign: "left",
+          verticalAlign: "top",
+          width: 186.47265625,
+          height: 141.9765625,
+          seed: 1968410350,
+          groupIds: [],
+          boundElements: null,
+          locked: false,
+          link: null,
+          updated: 1,
+          roundness: {
+            type: 3,
+            value: 32,
+          },
+        },
+      ],
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
+  }
+
+  async function click4(e: React.MouseEvent<HTMLButtonElement>) {
+    console.log("click4");
+    const canvas = await exportToCanvas(
+      excalidrawAPI?.getSceneElements() || [],
+      excalidrawAPI?.getAppState() || {},
+      excalidrawAPI?.getFiles() || [],
+      {}
+    );
+
+    console.log(canvas.toDataURL());
+
+    console.log(exportToSvg);
+    const svg = await exportToSvg(
+      excalidrawAPI?.getSceneElements() || [],
+      excalidrawAPI?.getAppState() || {},
+      excalidrawAPI?.getFiles() || []
+    );
+
+    console.log(svg);
+
+    console.log(exportToBlob);
+
+    const blob = await exportToBlob({
+      minType: "image/png",
+      quality: 1,
+      elements: excalidrawAPI?.getSceneElements() || [],
+      appState: excalidrawAPI?.getAppState() || {},
+      files: excalidrawAPI?.getFiles() || [],
+    });
+
+    console.log(blob);
+  }
+
   return (
-    <div style={{ height: "100vh" }}>
-      <input type="file" onChange={fileChange} accept="image/*" />
-      <button onClick={click1}>Export</button>
-      <button onClick={click2}>Export2</button>
+    <div
+      style={{
+        height: "100%",
+        width: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div style={{ height: "30px", width: "100%" }}>
+        <input type="file" onChange={fileChange} accept="image/*" />
+        <button onClick={click1}>Export</button>
+        <button onClick={click2}>Export2</button>
+        <button onClick={click3}>Export3</button>
+        <button onClick={click4}>save</button>
+      </div>
       <Excalidraw
         excalidrawAPI={(api) => setExcalidrawAPI(api)}
         initialData={{ elements }}
@@ -149,7 +270,17 @@ function App() {
             toggleTheme: true,
           },
         }}
-      />
+      >
+        <MainMenu>
+          <MainMenu.DefaultItems.SaveAsImage />
+          <MainMenu.Item onSelect={() => window.alert("Item1")}>
+            Item1
+          </MainMenu.Item>
+          <MainMenu.Item onSelect={() => window.alert("Item2")}>
+            Item 2
+          </MainMenu.Item>
+        </MainMenu>
+      </Excalidraw>
     </div>
   );
 }
